@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="da">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes">
+    <meta name="theme-color" content="#0A0F46">
+    <title>SUS (BA-Projekt)</title>
+    <!--
+      SUS WebGL-skabelon.
+      - Fylder hele skærmen på mobil, vises i stående telefonformat på PC.
+      - "Tryk for at starte": browsere må først afspille lyd efter et tryk. Trykket låser
+        FMOD-lyden op (så menu-musikken spiller som i mobil-appen) og spørger på iPhone om
+        adgang til kompasset (se Assets/Code/WebGL).
+      - Advarer hvis siden ikke er åbnet via HTTPS (så blokerer browseren GPS og kompas).
+    -->
+    <style>
+      html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #0A0F46; }
+      body { color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+      #sus-frame { position: fixed; inset: 0; margin: auto; width: 100vw; height: 100vh; height: 100dvh; }
+      @media (min-aspect-ratio: 3/4) and (pointer: fine) {
+        #sus-frame { width: calc(100vh * 9 / 19.5); width: calc(100dvh * 9 / 19.5); }
+      }
+      #unity-canvas { display: block; width: 100%; height: 100%; background: #0A0F46; outline: none; touch-action: none; }
+      .sus-overlay { position: absolute; inset: 0; box-sizing: border-box; padding: 24px; background: #0A0F46;
+                     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; text-align: center; }
+      #sus-progress { width: 60%; max-width: 260px; height: 3px; border-radius: 2px; overflow: hidden; background: rgba(255, 255, 255, 0.2); }
+      #sus-progress-fill { width: 0; height: 100%; background: #fff; transition: width 0.2s; }
+      #sus-start { font: inherit; font-size: 18px; color: #0A0F46; background: #fff; border: 0; border-radius: 999px; padding: 14px 28px; cursor: pointer; }
+      .sus-note { max-width: 300px; font-size: 14px; line-height: 1.4; opacity: 0.75; }
+      #sus-error { color: #ffb4b4; opacity: 1; }
+      [hidden] { display: none !important; }
+    </style>
+  </head>
+  <body>
+    <div id="sus-frame">
+      <canvas id="unity-canvas" tabindex="-1"></canvas>
+      <div id="sus-loading" class="sus-overlay">
+        <div class="sus-note">Indlæser …</div>
+        <div id="sus-progress"><div id="sus-progress-fill"></div></div>
+        <div id="sus-error" class="sus-note" hidden></div>
+      </div>
+      <div id="sus-start-screen" class="sus-overlay" hidden>
+        <button id="sus-start" type="button">Tryk for at starte</button>
+        <div class="sus-note">Brug høretelefoner. Giv adgang til placering og bevægelse, når browseren spørger.</div>
+        <div id="sus-https" class="sus-note" hidden>Åbn siden via et https://-link. Ellers blokerer browseren GPS og kompas.</div>
+      </div>
+    </div>
+    <script>
+      var canvas = document.querySelector("#unity-canvas");
+      var loading = document.querySelector("#sus-loading");
+      var startScreen = document.querySelector("#sus-start-screen");
+      var errorText = document.querySelector("#sus-error");
+
+      function showError(message) {
+        loading.hidden = false;
+        startScreen.hidden = true;
+        errorText.hidden = false;
+        errorText.textContent = String(message);
+      }
+
+      var buildUrl = "Build";
+      var config = {
+        arguments: [],
+        dataUrl: buildUrl + "/sus webtest.data.unityweb",
+        frameworkUrl: buildUrl + "/sus webtest.framework.js.unityweb",
+        codeUrl: buildUrl + "/sus webtest.wasm.unityweb",
+        streamingAssetsUrl: "StreamingAssets",
+        companyName: "DefaultCompany",
+        productName: "SUS (BA-Projekt)",
+        productVersion: "0.1.0",
+        showBanner: function (message, type) {
+          if (type === "error") showError(message);
+          else console.warn(message);
+        },
+        // Gem spildata OG FMOD-lydbankerne i browserens cache (IndexedDB). Så skal lyden kun
+        // hentes første gang - næste gang tjekkes blot om filen er ændret på serveren.
+        cacheControl: function (url) {
+          if (/\.data(\.unityweb|\.gz|\.br)?$/.test(url) || /\.bundle/.test(url) || /\.bank$/.test(url)) return "must-revalidate";
+          return "no-store";
+        }
+      };
+
+      // Telefoner med meget høj skærmopløsning: render højst i 2x, så WebGL kører flydende.
+      if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+        config.devicePixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+      }
+
+      var script = document.createElement("script");
+      script.src = buildUrl + "/sus webtest.loader.js";
+      script.onload = function () {
+        createUnityInstance(canvas, config, function (progress) {
+          document.querySelector("#sus-progress-fill").style.width = 100 * progress + "%";
+        }).then(function (unityInstance) {
+          loading.hidden = true;
+          startScreen.hidden = false;
+          document.querySelector("#sus-https").hidden = window.isSecureContext;
+
+          document.querySelector("#sus-start").addEventListener("click", function () {
+            // Selve trykket låser lyden op og spørger om kompas-adgang (lyttere i FMOD og SusWebDevice.jslib).
+            startScreen.hidden = true;
+            canvas.focus();
+          }, { once: true });
+        }).catch(showError);
+      };
+      document.body.appendChild(script);
+    </script>
+  </body>
+</html>
